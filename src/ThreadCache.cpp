@@ -3,6 +3,7 @@
 //
 #include "../include/ThreadCache.h"
 #include "../include/CentralCache.h"
+#include "ThreadCache.h"
 
 namespace MemoryPoolV2
 {
@@ -13,23 +14,33 @@ namespace MemoryPoolV2
  * @return
  */
 void* ThreadCache::fetchFromCentralCache(size_t index) {
+    // 根据对象内存大小计算批量获取的数量
+    size_t size = (index + 1) * ALIGNMENT;
+    size_t num_batch = getBatchNum(size);
+
     // 从中心缓存批量获取内存
-    void* start = CentralCache::getInstance().fetchRange(index);
+    void* start = CentralCache::getInstance().fetchRange(index, num_batch);
     if (start == nullptr) {
         return nullptr;
     }
-    // 取一个返回，其余放入自由链表
-    void* result = start;
-    free_list_[index] = *reinterpret_cast<void**>(start);
-    // 计算从中心缓存获取的内存块数量
-    size_t num_batch = 0;
-    void* cur = start;
-    while (cur) {
-        num_batch++;
-        cur = *reinterpret_cast<void**>(cur);
-    }
+    // // 取一个返回，其余放入自由链表
+    // void* result = start;
+    // free_list_[index] = *reinterpret_cast<void**>(start);
+    // // 计算从中心缓存获取的内存块数量
+    // size_t num_batch = 0;
+    // void* cur = start;
+    // while (cur) {
+    //     num_batch++;
+    //     cur = *reinterpret_cast<void**>(cur);
+    // }
+
     // 更新freeListSize_，增加获取的内存块数量
     free_list_size_[index] += num_batch;
+    // 取一个返回，其余放入线程本地自由链表
+    void* result = start;
+    if (num_batch > 1) {
+        free_list_[index] = *reinterpret_cast<void**>(start);
+    }
     return result;
 }
 
@@ -87,6 +98,31 @@ void ThreadCache::returnToCentralCache(void* start, size_t size) {
  */
 bool ThreadCache::shouldReturnToCentralCache(size_t index) {
     return free_list_size_[index] > threshold_;
+}
+
+/**
+ * 根据请求分配的内存块大小 size 来计算从中心缓存批量获取内存块的数量
+ * @param size
+ * @return
+ */
+size_t ThreadCache::getBatchNum(size_t size)
+{
+    // 基准：每次批量获取不超过4KB内存
+    constexpr size_t MAX_BATCH_SIZE = 4 * 1024; // 4KB
+    // 根据对象大小设置合理的基准批量数
+    size_t num_batch;
+    if (size <= 32) num_batch = 64;       // 64 * 32 = 2KB
+    else if (size <= 64) num_batch = 32;  // 32 * 64 = 2KB
+    else if (size <= 128) num_batch = 16; // 16 * 128 = 2KB
+    else if (size <= 256) num_batch = 8;  // 8 * 256 = 2KB
+    else if (size <= 512) num_batch = 4;  // 4 * 512 = 2KB
+    else if (size <= 1024) num_batch = 2; // 2 * 1024 = 2KB
+    else num_batch = 1;                   // 大于1024的对象每次只从中心缓存取1个
+    // 计算最大批量数
+    size_t maxNum = std::max(size_t(1), MAX_BATCH_SIZE / size);
+
+    // 取最小值，但确保至少返回1
+    return std::max(sizeof(1), std::min(maxNum, num_batch));
 }
 
 /**

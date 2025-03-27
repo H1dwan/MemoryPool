@@ -19,6 +19,7 @@ public:
     }
 
     void* fetchRange(size_t index);
+    void* fetchRange(size_t index, size_t num_batch);
     void returnRange(void* start, size_t size, size_t index);
 
 private:

@@ -31,6 +31,8 @@ private:
     void returnToCentralCache(void* start, size_t size);
     // 判断是否需要将线程本地缓存中的内存块归还给中心缓存
     bool shouldReturnToCentralCache(size_t index);
+    // 计算批量获取内存块的数量
+    size_t getBatchNum(size_t size);
 
 private:
     size_t threshold_;

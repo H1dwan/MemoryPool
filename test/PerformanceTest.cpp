@@ -131,7 +131,7 @@ public:
     // 3. 多线程测试
     static void testMultiThreaded()
     {
-        constexpr size_t NUM_THREADS = 4;
+        constexpr size_t NUM_THREADS = 6;
         constexpr size_t ALLOCS_PER_THREAD = 25000;
         constexpr size_t MAX_SIZE = 256;
 
